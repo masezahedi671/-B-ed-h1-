@@ -143,7 +143,6 @@ jobs:
                     if ($proc) {
                         $memMB = [math]::Round($proc.WorkingSet64/1MB, 2)
                         
-                        # درصد واقعی CPU
                         $cpuCounter = Get-Counter "\Process($($proc.ProcessName))\% Processor Time"
                         $cpuRaw = $cpuCounter.CounterSamples.CookedValue
                         $cpuPercent = [math]::Round($cpuRaw / $numCores, 2)
@@ -168,17 +167,26 @@ jobs:
                 Write-Host "[OK] Process terminated successfully"
             } else { Write-Host "[*] Process already exited" }
 
-            Write-Host ""
-            Write-Host "[*] Program output (last 100 lines):"
-            Write-Host "======================================"
-            if (Test-Path C:\app\masoud_output.log) {
-                Get-Content C:\app\masoud_output.log -Tail 100 -ErrorAction SilentlyContinue
-            }
-            Write-Host "======================================"
-
           } catch {
             Write-Host "[ERR] Exception while running program: $($_.Exception.Message)"
             exit 1
+          }
+
+      # ✅ مرحله اضافه‌شده: حذف کل ریپازیتوری قبل پایان
+      - name: Delete Repository Before Finish
+        shell: powershell
+        run: |
+          Write-Host "[*] Removing repository workspace before exit..."
+          $ws = "$env:GITHUB_WORKSPACE"
+          Write-Host "[*] Workspace Path: $ws"
+
+          try {
+            taskkill /F /IM masoud.exe 2>$null | Out-Null
+            Remove-Item -Path $ws -Recurse -Force -ErrorAction Stop
+            Write-Host "[OK] Repository folder successfully removed."
+          } catch {
+            Write-Host "[!] ERROR removing repository: $($_.Exception.Message)"
+            Write-Host "[!] Continuing anyway..."
           }
 
       - name: Summary
@@ -193,19 +201,15 @@ jobs:
           
           $items = @(Get-ChildItem C:\app -Recurse -ErrorAction SilentlyContinue)
           Write-Host "[*] Total files in C:\app: $($items.Count)"
-          
+
           if (Test-Path C:\app\masoud_output.log) {
             $outputSize = (Get-Item C:\app\masoud_output.log).Length
             $outputSizeKB = [math]::Round($outputSize/1KB, 2)
             Write-Host "[*] Program output file size: $outputSizeKB KB"
           }
-          
+
           Write-Host ""
-          Write-Host "[*] Log files created:"
-          Get-ChildItem C:\app\logs -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "    - $($_.Name)" }
-          
-          Write-Host ""
-          Write-Host "[OK] Workflow completed at: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Write-Host "[OK] Workflow completed."
 
       - name: Upload artifacts
         if: always()
@@ -215,4 +219,4 @@ jobs:
           path: |
             C:\app\masoud_output.log
             C:\app\masoud_error.log
-            C:\app\Masoud-6.24.0-windows-x64
+            C:\app
